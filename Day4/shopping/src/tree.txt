@@ -1,0 +1,13 @@
+.
+├── App.jsx
+├── Homepage.jsx
+├── components
+│   ├── Filter.jsx
+│   ├── Hero.jsx
+│   ├── Navbar.jsx
+│   └── Products.jsx
+├── index.css
+├── main.jsx
+└── tree.txt
+
+2 directories, 9 files
