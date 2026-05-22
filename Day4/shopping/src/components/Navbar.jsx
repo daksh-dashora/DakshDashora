@@ -4,7 +4,6 @@ export default function Navbar()
         <nav className="navbar">
         <h1 className="logo">MiniStore</h1>
 
-        
       </nav>
     )
 }
