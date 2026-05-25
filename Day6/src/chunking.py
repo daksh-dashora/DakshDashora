@@ -1,4 +1,4 @@
-def chunk_text(documents, chunk_size = 500, overlap = 100):
+def chunk_text(documents, chunk_size = 1000, overlap = 500):
     chunks = []
 
     for doc in documents:
@@ -6,7 +6,7 @@ def chunk_text(documents, chunk_size = 500, overlap = 100):
         start = 0
         while start<len(text):
             end = start+chunk_size
-            chunk = text[start:end]
+            chunk = text[start:end]     
             chunks.append({
                 "source": doc["source"],
                 "page": doc["page"],
@@ -17,22 +17,5 @@ def chunk_text(documents, chunk_size = 500, overlap = 100):
 
     return chunks
 
-if __name__ == "__main__":
 
-    from pdf_loader import load_all_pdfs
-
-    documents = load_all_pdfs("../data")
-
-    chunks = chunk_text(documents)
-
-    print(f"\nTotal chunks created: {len(chunks)}")
-
-    print("\n--- First Chunk ---\n")
-
-    print(f"Source: {chunks[0]['source']}")
-    print(f"Page: {chunks[0]['page']}")
-
-    print("\nChunk Text:\n")
-
-    print(chunks[0]["text"])
 

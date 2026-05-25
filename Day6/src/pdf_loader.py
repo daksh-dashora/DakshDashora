@@ -32,18 +32,3 @@ def load_all_pdfs(data_folder):
 
     return all_pages
 
-if __name__=="__main__":
-    data_folder = "../data"
-
-    documents = load_all_pdfs(data_folder)
-
-    print(f"\nTotal pages loaded: {len(documents)}")
-
-    print("\n--- First Document Preview ---\n")
-
-    print(f"Source: {documents[0]['source']}")
-    print(f"Page: {documents[0]['page']}")
-
-    print("\nText Preview:\n")
-
-    print(documents[0]["text"][:1000])
