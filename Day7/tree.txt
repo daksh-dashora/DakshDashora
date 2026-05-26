@@ -1,0 +1,20 @@
+.
+├── chroma_db
+├── data
+│   └── sample.pdf
+├── requirements.txt
+├── src
+│   ├── __init__.py
+│   ├── chroma_store.py
+│   ├── conversation_memory.py
+│   ├── embedding_model.py
+│   ├── groq_model.py
+│   ├── helpers.py
+│   ├── pdf_loader.py
+│   ├── prompt_template.py
+│   ├── rag_chain.py
+│   ├── retriever.py
+│   └── text_splitter.py
+└── tree.txt
+
+4 directories, 14 files

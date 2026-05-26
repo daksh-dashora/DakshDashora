@@ -1,0 +1,23 @@
+# Core LangChain
+langchain
+langchain-community
+langchain-core
+langchain-chroma
+# PDF Loading
+
+
+# Vector Store
+chromadb
+
+
+langchain-huggingface
+
+# LLM (Groq)
+groq
+langchain-groq
+
+# Env vars
+python-dotenv
+
+
+einops
