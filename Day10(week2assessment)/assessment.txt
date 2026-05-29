@@ -1,0 +1,214 @@
+q1-------------------------------------
+LLMs have a training cutoff and can't access new or private data — this causes hallucination (making up facts) 
+and staleness (outdated knowledge). RAG fixes this by retrieving relevant text chunks from an external database at 
+query time and feeding them into the prompt, so the model answers from real evidence rather than memory.
+
+q2---------------------------------------------
+
+(a) Embedding — A fixed-size numeric vector that represents the semantic meaning of text.
+(b) Vector similarity — How close two vectors are in space; most commonly measured with cosine similarity.
+(c) Chunk size — The number of tokens each document piece is split into before storing.
+(d) Chunk overlap — Tokens shared between adjacent chunks to avoid cutting answers at boundaries.
+(e) Top-k retrieval — Returning the k chunks most similar to the query vector.
+
+
+q3-----------------------------------------
+1. Chunks are too large → noisy, unfocused embeddings
+2. Zero overlap → answers get severed at boundaries
+3. Large chunks consume most of the context window
+
+
+q4----------------------------------------
+import chromadb
+from sentence_transformers import SentenceTransformer
+
+
+documents = [
+    "The refund policy allows returns within 30 days of purchase with a valid receipt.",
+    "All employees must complete the annual cybersecurity training by December 31st.",
+    "The office is located at 42 Innovation Drive, and opens at 9 AM on weekdays.",
+]
+doc_ids = ["doc_0", "doc_1", "doc_2"]
+
+
+model = SentenceTransformer("all-MiniLM-L6-v2")   # lightweight, 384-dim
+
+def embed(texts: list[str]) -> list[list[float]]:
+    return model.encode(texts, convert_to_numpy=True).tolist()
+
+doc_embeddings = embed(documents)
+
+
+client = chromadb.Client()                        
+collection = client.create_collection(name="policy_docs")
+
+collection.add(
+    ids=doc_ids,
+    embeddings=doc_embeddings,
+    documents=documents,
+)
+
+
+query = "When is the deadline for security training?"
+query_embedding = embed([query])
+
+results = collection.query(
+    query_embeddings=query_embedding,
+    n_results=2,
+)
+
+print(f"Query: {query}\n")
+print("Top-2 retrieved documents:")
+for i, (doc, distance) in enumerate(
+    zip(results["documents"][0], results["distances"][0]), start=1
+):
+    print(f"  [{i}] (distance={distance:.4f}) {doc}")
+
+q5--------------------------------------------------------------------
+The model references facts not in the retrieved context.
+
+Retrieval — Add a re-ranker to ensure only truly relevant chunks reach the prompt.
+Prompt — Explicitly instruct: "Answer only from the context. If unsure, say 'I don't know.'"
+Evaluation — Use a faithfulness scorer (e.g. RAGAS) to flag unsupported claims in outputs.
+
+
+q6----------------------------------------------------------------------------
+LCEL (LangChain Expression Language) is a declarative way to compose LangChain components into a pipeline. 
+The | pipe operator chains components left to right — output of one becomes input of the next. 
+It's preferred over manual .invoke() wiring because it handles streaming, batching, and async automatically, 
+and the chain reads like a clean data flow.
+
+q7------------------------------------------------------------------------------
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+prompt = ChatPromptTemplate.from_template("Write a one-sentence tagline for: {topic}")
+model = ChatOpenAI()
+chain = prompt | model | StrOutputParser()
+
+chain.invoke({"topic": "electric scooters"})
+
+
+q8---------------------------------------------------------------------------
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import PydanticOutputParser
+from pydantic import BaseModel, Field
+
+class MovieReview(BaseModel):
+    title: str
+    rating: int = Field(ge=1, le=10)
+    one_line_review: str
+
+parser = PydanticOutputParser(pydantic_object=MovieReview)
+
+prompt = ChatPromptTemplate.from_template(
+    "Review the movie '{movie}'.\n{format_instructions}"
+).partial(format_instructions=parser.get_format_instructions())
+
+chain = prompt | ChatOpenAI() | parser
+result = chain.invoke({"movie": "Inception"})  # returns MovieReview object
+
+
+q9-------------------------------------------------------------------------------------------
+(a) Loading the PDF → PyPDFLoader
+(b) Splitting into chunks → RecursiveCharacterTextSplitter
+(c) Embedding the chunks → OpenAIEmbeddings
+(d) Storing in a vector store → Chroma
+(e) Retrieving relevant chunks → vectorstore.as_retriever()
+(f) Prompt + model + parser → ChatPromptTemplate | ChatOpenAI | StrOutputParser
+
+
+q10-------------------------------------------------------
+A chain is a fixed linear sequence — input flows through each step in order and exits. 
+A graph (LangGraph) is a stateful, directed structure where nodes can loop, branch, or revisit previous steps based on conditions. 
+A chain can't make decisions mid-flow or retry steps. 
+Example: a graph can call a tool, inspect the result, and loop back to the agent if the answer is still incomplete — 
+a chain simply cannot loop.
+
+q11----------------------------------------------------------
+State — A shared TypedDict that every node can read from and write to, persisted across the entire run.
+Nodes — Python functions that receive the current state, do work, and return updated state.
+Edges — Fixed connections that always route from one node to the next unconditionally.
+Conditional edges — Router functions that inspect state and return which node to go to next.
+
+
+q12------------------------------------------------------------
+from typing import TypedDict
+from langgraph.graph import StateGraph, START, END
+
+class State(TypedDict):
+    messages: list
+
+def greet(state: State):
+    return {"messages": state["messages"] + ["Hello!"]}
+
+def farewell(state: State):
+    return {"messages": state["messages"] + ["Goodbye!"]}
+
+graph = StateGraph(State)
+graph.add_node("greet", greet)
+graph.add_node("farewell", farewell)
+graph.add_edge(START, "greet")
+graph.add_edge("greet", "farewell")
+graph.add_edge("farewell", END)
+
+app = graph.compile()
+print(app.invoke({"messages": []}))
+
+
+q13----------------------------------------------------
+State shape:
+{ "messages": list, "tool_result": str, "steps": int }
+Nodes:
+
+agent — LLM looks at messages, decides to call a tool or answer directly, writes decision to state
+tool — Runs the search tool, writes result back into tool_result and appends to messages
+end — Returns the final answer
+
+Conditional edge after agent:
+if agent said "call tool"  → go to "tool"
+if agent said "answer"     → go to "end"
+After tool runs, edge always loops back to agent.
+Loop termination — two guards:
+
+If steps >= 5, conditional edge forces routing to end regardless of agent decision
+If tool_result is empty or search failed, agent is prompted to answer directly
+
+START -> agent -> [conditional] -> tool -> agent -> ... -> end
+                               -> (or steps>5)  ->  end
+
+
+q14-----------------------------------------
+LLMs can reason but can't natively talk to external tools, files, or APIs in a standardised way —
+every integration was custom-built. MCP (Model Context Protocol) solves this by providing a single universal
+ protocol for connecting AI models to external capabilities. The host is the application running the LLM (e.g. Claude Desktop). 
+ The client is the piece inside the host that speaks MCP protocol. The server is the external process that exposes
+  capabilities — it can expose tools (functions the model can call), resources (readable data like files or DB records), and
+   prompts (pre-built prompt templates).
+
+q15-----------------------------------------------
+Tool — Something the model invokes to perform an action or computation; e.g. send_email(to, subject, body).
+Resource — Something the model reads as passive context; e.g. file://docs/policy.pdf loaded into the prompt.
+
+q16--------------------------------------------------------
+from fastmcp import FastMCP
+
+mcp = FastMCP("word-count-server")
+
+@mcp.tool()
+def word_count(text: str) -> int:
+    """Count the number of words in the provided string."""
+    return len(text.split())
+
+if __name__ == "__main__":
+    mcp.run(transport="stdio")
+
+q17--------------------------------------------------------------------
+Reusability — A function calling integration is glued to one LLM SDK. 
+An MCP server works with any host that speaks MCP (Claude, Cursor, your own app) without rewriting anything.
+
+
+Process isolation — MCP servers run as separate processes, so a buggy or slow tool can't crash your main application, 
+and you can update the tool without redeploying the agent.
